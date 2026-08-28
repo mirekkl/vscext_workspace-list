@@ -1,0 +1,223 @@
+{
+  "name": "workspace-list",
+  "displayName": "Workspace List",
+  "description": "Keep a curated list of workspaces with descriptions, tags, and favourite files.",
+  "version": "0.0.3",
+  "publisher": "local",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "workspaceList",
+          "title": "Workspace List",
+          "icon": "$(list-tree)"
+        }
+      ]
+    },
+    "views": {
+      "workspaceList": [
+        {
+          "id": "workspaceList.view",
+          "name": "Workspaces"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "workspaceList.addWorkspace",
+        "title": "Add Workspace...",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workspaceList.addCurrentWorkspace",
+        "title": "Add Current Workspace",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "workspaceList.importRecent",
+        "title": "Import from Recently Opened...",
+        "icon": "$(history)"
+      },
+      {
+        "command": "workspaceList.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "workspaceList.openWorkspace",
+        "title": "Open in New Window"
+      },
+      {
+        "command": "workspaceList.editMetadata",
+        "title": "Edit Metadata...",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "workspaceList.removeWorkspace",
+        "title": "Remove from List",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "workspaceList.openFavouriteFile",
+        "title": "Open File"
+      },
+      {
+        "command": "workspaceList.filter",
+        "title": "Filter Workspaces...",
+        "icon": "$(search)"
+      },
+      {
+        "command": "workspaceList.clearFilter",
+        "title": "Clear Filter",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "workspaceList.addGroup",
+        "title": "New Group...",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "workspaceList.editGroupMetadata",
+        "title": "Edit Group Metadata...",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "workspaceList.removeGroup",
+        "title": "Remove Group",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "workspaceList.moveToGroup",
+        "title": "Move to Group..."
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "workspaceList.addWorkspace",
+          "when": "view == workspaceList.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "workspaceList.addCurrentWorkspace",
+          "when": "view == workspaceList.view",
+          "group": "navigation@2"
+        },
+        {
+          "command": "workspaceList.filter",
+          "when": "view == workspaceList.view",
+          "group": "navigation@3"
+        },
+        {
+          "command": "workspaceList.clearFilter",
+          "when": "view == workspaceList.view",
+          "group": "navigation@4"
+        },
+        {
+          "command": "workspaceList.addGroup",
+          "when": "view == workspaceList.view",
+          "group": "navigation@5"
+        },
+        {
+          "command": "workspaceList.importRecent",
+          "when": "view == workspaceList.view",
+          "group": "overflow@1"
+        },
+        {
+          "command": "workspaceList.refresh",
+          "when": "view == workspaceList.view",
+          "group": "overflow@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "workspaceList.openWorkspace",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceList.editMetadata",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceList.removeWorkspace",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "inline@3"
+        },
+        {
+          "command": "workspaceList.openWorkspace",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "1_open"
+        },
+        {
+          "command": "workspaceList.editMetadata",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "2_edit"
+        },
+        {
+          "command": "workspaceList.moveToGroup",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "2_edit"
+        },
+        {
+          "command": "workspaceList.removeWorkspace",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "3_remove"
+        },
+        {
+          "command": "workspaceList.addGroup",
+          "when": "view == workspaceList.view && viewItem == workspaceGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceList.editGroupMetadata",
+          "when": "view == workspaceList.view && viewItem == workspaceGroup",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceList.removeGroup",
+          "when": "view == workspaceList.view && viewItem == workspaceGroup",
+          "group": "inline@3"
+        },
+        {
+          "command": "workspaceList.addGroup",
+          "when": "view == workspaceList.view && viewItem == workspaceGroup",
+          "group": "1_open"
+        },
+        {
+          "command": "workspaceList.editGroupMetadata",
+          "when": "view == workspaceList.view && viewItem == workspaceGroup",
+          "group": "2_edit"
+        },
+        {
+          "command": "workspaceList.removeGroup",
+          "when": "view == workspaceList.view && viewItem == workspaceGroup",
+          "group": "3_remove"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "compile": "tsc --noEmit -p ./",
+    "package": "node esbuild.js --production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.0"
+  }
+}
