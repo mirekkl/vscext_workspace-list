@@ -99,6 +99,7 @@ export function createUpdateStatusBarItem(context: vscode.ExtensionContext): vsc
 
 function setPendingUpdate(update: UpdateInfo | undefined): void {
   pendingUpdate = update;
+  void vscode.commands.executeCommand('setContext', 'workspaceList.updateAvailable', !!update);
   if (!statusBarItem) return;
   if (update) {
     statusBarItem.text = `$(cloud-download) Workspace List ${update.version}`;
