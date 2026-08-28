@@ -133,47 +133,106 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
 <style>
-  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 16px; }
-  label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 600; }
-  input[type=text], textarea {
-    width: 100%; box-sizing: border-box; background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent);
-    padding: 6px; font-family: inherit;
+  body {
+    font-family: var(--vscode-font-family); color: var(--vscode-foreground);
+    padding: 0; font-size: 13px;
   }
-  textarea { min-height: 70px; resize: vertical; }
+  .field {
+    padding: 18px 24px; border-bottom: 1px solid var(--vscode-settings-sashBorder, transparent);
+  }
+  .field:nth-child(odd) { background: var(--vscode-settings-rowHoverBackground, transparent); }
+  .field-label {
+    display: block; margin-bottom: 4px; font-size: 14px;
+  }
+  .field-label .category { color: var(--vscode-settings-headerForeground, var(--vscode-descriptionForeground)); font-weight: 400; }
+  .field-label .name { font-weight: 600; }
+  .field-description {
+    color: var(--vscode-descriptionForeground); font-size: 13px; margin-bottom: 10px; line-height: 1.5; max-width: 640px;
+  }
+  input[type=text], textarea {
+    width: 100%; max-width: 640px; box-sizing: border-box;
+    background: var(--vscode-settings-textInputBackground, var(--vscode-input-background));
+    color: var(--vscode-settings-textInputForeground, var(--vscode-input-foreground));
+    border: 1px solid var(--vscode-settings-textInputBorder, var(--vscode-input-border, transparent));
+    border-radius: 2px; padding: 7px 9px; font-family: inherit; font-size: 13px;
+  }
+  input[type=text]:focus, textarea:focus {
+    outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px;
+  }
+  textarea {
+    min-height: 100px; resize: vertical; line-height: 1.5;
+  }
+  .name-wrap { position: relative; max-width: 640px; }
+  #name { overflow-x: auto; white-space: nowrap; text-overflow: clip; max-width: none; }
+  .overflow-arrow {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 22px;
+    display: none; align-items: center; justify-content: center;
+    pointer-events: none; background: linear-gradient(to right, transparent, var(--vscode-settings-textInputBackground, var(--vscode-input-background)) 60%);
+  }
+  .overflow-arrow.visible { display: flex; }
+  .overflow-arrow svg { width: 8px; height: 8px; fill: var(--vscode-descriptionForeground); }
   .row { display: flex; gap: 8px; align-items: center; }
-  ul#favList { list-style: none; padding: 0; margin: 6px 0; }
-  ul#favList li { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; background: var(--vscode-editorWidget-background); margin-bottom: 4px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch {
+    width: 24px; height: 24px; border-radius: 4px; cursor: pointer;
+    border: 2px solid transparent; padding: 0; box-sizing: border-box;
+  }
+  .swatch:hover { border-color: var(--vscode-focusBorder); }
+  .swatch.selected { border-color: var(--vscode-foreground); }
+  ul#favList { list-style: none; padding: 0; margin: 6px 0; max-width: 640px; }
+  ul#favList li {
+    display: flex; justify-content: space-between; align-items: center; padding: 6px 9px;
+    background: var(--vscode-editorWidget-background); border-radius: 2px; margin-bottom: 4px;
+  }
   button {
     background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-    border: none; padding: 6px 12px; cursor: pointer;
+    border: none; padding: 6px 14px; cursor: pointer; border-radius: 2px; font-size: 13px;
   }
   button:hover { background: var(--vscode-button-hoverBackground); }
   button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+  button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
   .remove-btn { background: transparent; color: var(--vscode-errorForeground); padding: 2px 8px; }
-  #saveBar { margin-top: 20px; }
+  .remove-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+  #saveBar { padding: 18px 24px; }
 </style>
 </head>
 <body>
-  <label for="name">Name</label>
-  <input type="text" id="name" value="${escapeHtml(data.name)}" />
+  <div class="field">
+    <label class="field-label" for="name"><span class="category">Workspace:</span> <span class="name">Name</span></label>
+    <div class="field-description">Up to 50 characters. Longer names scroll horizontally within the field.</div>
+    <div class="name-wrap">
+      <input type="text" id="name" maxlength="50" value="${escapeHtml(data.name)}" />
+      <div class="overflow-arrow" id="nameOverflow"><svg viewBox="0 0 8 8"><path d="M0 0 L8 4 L0 8 Z"/></svg></div>
+    </div>
+  </div>
 
-  <label for="description">Description</label>
-  <textarea id="description">${escapeHtml(data.description)}</textarea>
+  <div class="field">
+    <label class="field-label" for="description"><span class="category">Workspace:</span> <span class="name">Description</span></label>
+    <textarea id="description">${escapeHtml(data.description)}</textarea>
+  </div>
 
-  <label for="tags">Tags (comma-separated)</label>
-  <input type="text" id="tags" value="${escapeHtml(data.tags.join(', '))}" />
+  <div class="field">
+    <label class="field-label" for="tags"><span class="category">Workspace:</span> <span class="name">Tags</span></label>
+    <div class="field-description">Comma-separated.</div>
+    <input type="text" id="tags" value="${escapeHtml(data.tags.join(', '))}" />
+  </div>
 
-  <label for="color">Color</label>
-  <div class="row">
-    <input type="color" id="color" value="${escapeHtml(data.color || '#808080')}" />
-    <button type="button" id="clearColorBtn" class="secondary">Clear</button>
+  <div class="field">
+    <label class="field-label" for="color"><span class="category">Workspace:</span> <span class="name">Color</span></label>
+    <div class="field-description">Click a swatch to apply it, or pick a custom color.</div>
+    <div class="swatches" id="swatches"></div>
+    <div class="row" style="margin-top: 8px;">
+      <input type="color" id="color" value="${escapeHtml(data.color || '#808080')}" title="Custom color" />
+      <button type="button" id="clearColorBtn" class="secondary">Clear</button>
+    </div>
   </div>
 
   ${showFavourites ? `
-  <label>Favourite Files</label>
-  <ul id="favList"></ul>
-  <button id="addFavBtn" class="secondary">Add File...</button>
+  <div class="field">
+    <label class="field-label"><span class="category">Workspace:</span> <span class="name">Favourite Files</span></label>
+    <ul id="favList"></ul>
+    <button id="addFavBtn" class="secondary">Add File...</button>
+  </div>
   ` : ''}
 
   <div id="saveBar">
@@ -205,12 +264,51 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   }
   renderFavs();
 
+  const nameInput = document.getElementById('name');
+  const nameOverflow = document.getElementById('nameOverflow');
+  function updateNameOverflow() {
+    const atEnd = nameInput.scrollLeft + nameInput.clientWidth >= nameInput.scrollWidth - 1;
+    nameOverflow.classList.toggle('visible', nameInput.scrollWidth > nameInput.clientWidth + 1 && !atEnd);
+  }
+  nameInput.addEventListener('input', updateNameOverflow);
+  nameInput.addEventListener('scroll', updateNameOverflow);
+  window.addEventListener('resize', updateNameOverflow);
+  updateNameOverflow();
+
+  const PRESET_COLORS = [
+    '#e51400', '#fa6800', '#f0a30a', '#6a8f00', '#00a300',
+    '#00aba9', '#1ba1e2', '#0050ef', '#6a00ff', '#aa00ff',
+    '#d80073', '#a20025', '#647687', '#76608a', '#808080'
+  ];
+
   let colorCleared = ${JSON.stringify(!data.color)};
   const colorInput = document.getElementById('color');
-  colorInput.addEventListener('input', () => { colorCleared = false; });
+  const swatchesEl = document.getElementById('swatches');
+
+  function renderSwatches() {
+    swatchesEl.innerHTML = '';
+    const current = colorCleared ? '' : colorInput.value.toLowerCase();
+    PRESET_COLORS.forEach((hex) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'swatch' + (hex === current ? ' selected' : '');
+      btn.style.background = hex;
+      btn.title = hex;
+      btn.addEventListener('click', () => {
+        colorCleared = false;
+        colorInput.value = hex;
+        renderSwatches();
+      });
+      swatchesEl.appendChild(btn);
+    });
+  }
+  renderSwatches();
+
+  colorInput.addEventListener('input', () => { colorCleared = false; renderSwatches(); });
   document.getElementById('clearColorBtn').addEventListener('click', () => {
     colorCleared = true;
     colorInput.value = '#808080';
+    renderSwatches();
   });
 
   if (showFavourites) {
