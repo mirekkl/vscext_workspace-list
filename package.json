@@ -2,7 +2,7 @@
   "name": "workspace-list",
   "displayName": "Workspace List",
   "description": "Keep a curated list of workspaces with descriptions, tags, and favourite files.",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "publisher": "kodoro",
   "private": true,
   "repository": {

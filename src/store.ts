@@ -2,7 +2,19 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 import { WorkspaceEntry, WorkspaceListData, Group, createEmptyData } from './types';
 
-const STORE_FILE = 'workspaces.json';
+const STORE_FILE = 'workspace-list.json';
+/** Legacy per-profile filename, used only for one-time migration into the shared store. */
+const LEGACY_STORE_FILE = 'workspaces.json';
+
+/**
+ * `globalStorageUri` is `.../User/globalStorage/<publisher>.<name>`, scoped to the current
+ * profile. Walking up two levels lands on `.../User`, which is shared by every profile of this
+ * VS Code install (same folder `settings.json` lives in) - that's the directory we store the
+ * shared workspace list in, so all profiles on this machine see the same list.
+ */
+function sharedUserDirUri(context: vscode.ExtensionContext): vscode.Uri {
+  return vscode.Uri.joinPath(context.globalStorageUri, '..', '..');
+}
 
 export class WorkspaceStore {
   private data: WorkspaceListData = createEmptyData();
@@ -10,21 +22,57 @@ export class WorkspaceStore {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange = this._onDidChange.event;
   private writeQueue: Promise<void> = Promise.resolve();
+  private suppressNextWatcherEvent = false;
+  private watcher: vscode.FileSystemWatcher | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    this.storageUri = vscode.Uri.joinPath(context.globalStorageUri, STORE_FILE);
+    this.storageUri = vscode.Uri.joinPath(sharedUserDirUri(context), STORE_FILE);
+  }
+
+  /** Watches the shared file for changes made by other windows/profiles and reloads live. */
+  watchForExternalChanges(): vscode.Disposable {
+    const pattern = new vscode.RelativePattern(sharedUserDirUri(this.context), STORE_FILE);
+    this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
+    const reload = async () => {
+      if (this.suppressNextWatcherEvent) {
+        this.suppressNextWatcherEvent = false;
+        return;
+      }
+      await this.load();
+      this._onDidChange.fire();
+    };
+    this.watcher.onDidChange(reload);
+    this.watcher.onDidCreate(reload);
+    return this.watcher;
   }
 
   async load(): Promise<void> {
     try {
-      await vscode.workspace.fs.createDirectory(this.context.globalStorageUri);
       const bytes = await vscode.workspace.fs.readFile(this.storageUri);
-      const parsed = JSON.parse(Buffer.from(bytes).toString('utf8'));
-      if (parsed && parsed.version === 1 && Array.isArray(parsed.workspaces)) {
-        this.data = { version: 2, workspaces: parsed.workspaces, groups: [] };
-      } else if (parsed && parsed.version === 2 && Array.isArray(parsed.workspaces) && Array.isArray(parsed.groups)) {
-        this.data = parsed;
-      }
+      this.data = this.parse(bytes);
+    } catch {
+      await this.migrateLegacyIfPresent();
+    }
+  }
+
+  private parse(bytes: Uint8Array): WorkspaceListData {
+    const parsed = JSON.parse(Buffer.from(bytes).toString('utf8'));
+    if (parsed && parsed.version === 1 && Array.isArray(parsed.workspaces)) {
+      return { version: 2, workspaces: parsed.workspaces, groups: [] };
+    }
+    if (parsed && parsed.version === 2 && Array.isArray(parsed.workspaces) && Array.isArray(parsed.groups)) {
+      return parsed;
+    }
+    return createEmptyData();
+  }
+
+  /** One-time migration from the old per-profile storage location, so existing lists aren't lost. */
+  private async migrateLegacyIfPresent(): Promise<void> {
+    try {
+      const legacyUri = vscode.Uri.joinPath(this.context.globalStorageUri, LEGACY_STORE_FILE);
+      const bytes = await vscode.workspace.fs.readFile(legacyUri);
+      this.data = this.parse(bytes);
+      await this.persist();
     } catch {
       this.data = createEmptyData();
     }
@@ -215,9 +263,12 @@ export class WorkspaceStore {
 
   private async persist(): Promise<void> {
     this.writeQueue = this.writeQueue.then(async () => {
-      const tmpUri = vscode.Uri.joinPath(this.context.globalStorageUri, `${STORE_FILE}.tmp`);
+      const dirUri = sharedUserDirUri(this.context);
+      const tmpUri = vscode.Uri.joinPath(dirUri, `${STORE_FILE}.tmp`);
       const bytes = Buffer.from(JSON.stringify(this.data, null, 2), 'utf8');
+      await vscode.workspace.fs.createDirectory(dirUri);
       await vscode.workspace.fs.writeFile(tmpUri, bytes);
+      this.suppressNextWatcherEvent = true;
       await vscode.workspace.fs.rename(tmpUri, this.storageUri, { overwrite: true });
       this._onDidChange.fire();
     });

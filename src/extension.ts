@@ -9,6 +9,7 @@ import { checkForUpdateCommand, checkForUpdateOnStartup, createUpdateStatusBarIt
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const store = new WorkspaceStore(context);
   await store.load();
+  context.subscriptions.push(store.watchForExternalChanges());
 
   const treeProvider = new WorkspaceTreeProvider(store);
   const treeView = vscode.window.createTreeView('workspaceList.view', {
