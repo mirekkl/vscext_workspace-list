@@ -2,9 +2,13 @@
   "name": "workspace-list",
   "displayName": "Workspace List",
   "description": "Keep a curated list of workspaces with descriptions, tags, and favourite files.",
-  "version": "0.0.3",
-  "publisher": "local",
+  "version": "0.0.6",
+  "publisher": "kodoro",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mirekkl/vscext_workspace-list"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -98,6 +102,10 @@
       {
         "command": "workspaceList.moveToGroup",
         "title": "Move to Group..."
+      },
+      {
+        "command": "workspaceList.checkForUpdates",
+        "title": "Workspace List: Check for Updates..."
       }
     ],
     "menus": {
@@ -136,6 +144,11 @@
           "command": "workspaceList.refresh",
           "when": "view == workspaceList.view",
           "group": "overflow@2"
+        },
+        {
+          "command": "workspaceList.checkForUpdates",
+          "when": "view == workspaceList.view",
+          "group": "overflow@3"
         }
       ],
       "view/item/context": [

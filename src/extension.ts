@@ -4,6 +4,7 @@ import { WorkspaceStore } from './store';
 import { WorkspaceTreeProvider, WorkspaceNode, FavouriteFileNode, GroupNode } from './treeProvider';
 import { openMetadataEditor, openGroupMetadataEditor } from './metadataEditor';
 import { WorkspaceEntry, WorkspaceEntryType, Group } from './types';
+import { checkForUpdateCommand, checkForUpdateOnStartup, createUpdateStatusBarItem } from './update';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const store = new WorkspaceStore(context);
@@ -131,8 +132,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const pick = await vscode.window.showQuickPick(items, { placeHolder: `Move "${entry.name}" to group...` });
       if (!pick) return;
       await store.setGroup(entry.id, pick.groupId);
-    })
+    }),
+
+    vscode.commands.registerCommand('workspaceList.checkForUpdates', () => checkForUpdateCommand())
   );
+
+  createUpdateStatusBarItem(context);
+  void checkForUpdateOnStartup(context);
 }
 
 function groupPathLabel(store: WorkspaceStore, group: Group): string {
