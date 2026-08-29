@@ -2,7 +2,12 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceStore } from './store';
 import { WorkspaceTreeProvider, WorkspaceNode, FavouriteFileNode, GroupNode } from './treeProvider';
-import { openMetadataEditor, openGroupMetadataEditor } from './metadataEditor';
+import {
+  openMetadataEditor,
+  openGroupMetadataEditor,
+  isEntryMetadataEditorOpen,
+  switchOrOpenMetadataEditor,
+} from './metadataEditor';
 import { WorkspaceEntry, WorkspaceEntryType, Group } from './types';
 import { checkForUpdateCommand, checkForUpdateOnStartup, createUpdateStatusBarItem } from './update';
 
@@ -17,6 +22,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     dragAndDropController: treeProvider,
   });
   context.subscriptions.push(treeView);
+
+  const DOUBLE_CLICK_MS = 500;
+  let lastSelectedId: string | undefined;
+  let lastSelectedAt = 0;
+  context.subscriptions.push(
+    treeView.onDidChangeSelection((e) => {
+      const node = e.selection[0];
+      if (!(node instanceof WorkspaceNode)) {
+        lastSelectedId = undefined;
+        return;
+      }
+      const now = Date.now();
+      const isDoubleClick = lastSelectedId === node.entry.id && now - lastSelectedAt < DOUBLE_CLICK_MS;
+      lastSelectedId = node.entry.id;
+      lastSelectedAt = now;
+      if (isDoubleClick) {
+        lastSelectedId = undefined;
+        void vscode.commands.executeCommand('workspaceList.openWorkspace', node);
+      } else if (isEntryMetadataEditorOpen()) {
+        void switchOrOpenMetadataEditor(context, store, node.entry.id);
+      }
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('workspaceList.refresh', async () => {

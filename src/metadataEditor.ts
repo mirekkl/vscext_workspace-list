@@ -4,13 +4,79 @@ import { WorkspaceStore } from './store';
 import { WorkspaceEntry, Group, FavouriteFile } from './types';
 import { colorPickerStyles, colorPickerScript } from './colorPicker/colorPicker';
 
-const panels = new Map<string, vscode.WebviewPanel>();
+const groupPanels = new Map<string, vscode.WebviewPanel>();
+
+/** Single reusable panel for workspace-entry metadata: switching entries rebinds it in place. */
+let entryPanel: vscode.WebviewPanel | undefined;
+let entryPanelEntryId: string | undefined;
+let entryPanelMessageSub: vscode.Disposable | undefined;
+
+/** True if a workspace-entry metadata panel is currently open (used to decide whether tree selection should switch it). */
+export function isEntryMetadataEditorOpen(): boolean {
+  return entryPanel !== undefined;
+}
+
+let requestCounter = 0;
+
+function postAndAwait<T extends { type: string }>(
+  panel: vscode.WebviewPanel,
+  message: unknown,
+  responseType: string
+): Promise<T> {
+  const requestId = ++requestCounter;
+  return new Promise((resolve) => {
+    const sub = panel.webview.onDidReceiveMessage((msg) => {
+      if (msg && msg.type === responseType && msg.requestId === requestId) {
+        sub.dispose();
+        resolve(msg as T);
+      }
+    });
+    panel.webview.postMessage({ ...(message as object), requestId });
+  });
+}
+
+/**
+ * Switches the open entry-metadata panel to a different entry, or opens it fresh if none is open.
+ * If the panel has unsaved changes, asks the user whether to save, discard, or cancel the switch.
+ */
+export async function switchOrOpenMetadataEditor(
+  context: vscode.ExtensionContext,
+  store: WorkspaceStore,
+  entryId: string
+): Promise<void> {
+  if (!entryPanel || entryPanelEntryId === entryId) {
+    openMetadataEditor(context, store, entryId);
+    return;
+  }
+
+  const { dirty } = await postAndAwait<{ type: string; dirty: boolean }>(
+    entryPanel,
+    { type: 'checkDirty' },
+    'dirtyState'
+  );
+  if (!dirty) {
+    openMetadataEditor(context, store, entryId);
+    return;
+  }
+
+  const choice = await vscode.window.showWarningMessage(
+    'This workspace entry has unsaved metadata changes. Save before switching?',
+    { modal: true },
+    'Save',
+    'Discard'
+  );
+  if (choice === undefined) {
+    return;
+  }
+  if (choice === 'Save') {
+    await postAndAwait(entryPanel, { type: 'saveNow' }, 'saved');
+  }
+  openMetadataEditor(context, store, entryId);
+}
 
 export function openMetadataEditor(context: vscode.ExtensionContext, store: WorkspaceStore, entryId: string): void {
-  const key = `entry:${entryId}`;
-  const existing = panels.get(key);
-  if (existing) {
-    existing.reveal();
+  if (entryPanel && entryPanelEntryId === entryId) {
+    entryPanel.reveal();
     return;
   }
 
@@ -20,15 +86,34 @@ export function openMetadataEditor(context: vscode.ExtensionContext, store: Work
     return;
   }
 
+  if (entryPanel) {
+    loadEntryIntoPanel(entryPanel, store, entry);
+    entryPanel.reveal();
+    return;
+  }
+
   const panel = vscode.window.createWebviewPanel(
     'workspaceList.editMetadata',
     `Edit: ${entry.name}`,
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true }
   );
-  panels.set(key, panel);
-  panel.onDidDispose(() => panels.delete(key));
+  entryPanel = panel;
+  panel.onDidDispose(() => {
+    if (entryPanel === panel) {
+      entryPanel = undefined;
+      entryPanelEntryId = undefined;
+      entryPanelMessageSub?.dispose();
+      entryPanelMessageSub = undefined;
+    }
+  });
 
+  loadEntryIntoPanel(panel, store, entry);
+}
+
+function loadEntryIntoPanel(panel: vscode.WebviewPanel, store: WorkspaceStore, entry: WorkspaceEntry): void {
+  entryPanelEntryId = entry.id;
+  panel.title = `Edit: ${entry.name}`;
   panel.webview.html = renderHtml(panel.webview, {
     name: entry.name,
     description: entry.description,
@@ -37,17 +122,20 @@ export function openMetadataEditor(context: vscode.ExtensionContext, store: Work
     favouriteFiles: entry.favouriteFiles,
   });
 
-  panel.webview.onDidReceiveMessage(async (msg) => {
+  entryPanelMessageSub?.dispose();
+  entryPanelMessageSub = panel.webview.onDidReceiveMessage(async (msg) => {
     switch (msg.type) {
       case 'save': {
-        await store.update(entryId, {
+        await store.update(entry.id, {
           name: msg.data.name,
           description: msg.data.description,
           tags: msg.data.tags,
           color: msg.data.color || undefined,
           favouriteFiles: msg.data.favouriteFiles,
         });
-        panel.title = `Edit: ${msg.data.name}`;
+        if (entryPanelEntryId === entry.id) {
+          panel.title = `Edit: ${msg.data.name}`;
+        }
         vscode.window.showInformationMessage(`Saved "${msg.data.name}".`);
         break;
       }
@@ -72,8 +160,7 @@ export function openMetadataEditor(context: vscode.ExtensionContext, store: Work
 }
 
 export function openGroupMetadataEditor(context: vscode.ExtensionContext, store: WorkspaceStore, groupId: string): void {
-  const key = `group:${groupId}`;
-  const existing = panels.get(key);
+  const existing = groupPanels.get(groupId);
   if (existing) {
     existing.reveal();
     return;
@@ -91,8 +178,8 @@ export function openGroupMetadataEditor(context: vscode.ExtensionContext, store:
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true }
   );
-  panels.set(key, panel);
-  panel.onDidDispose(() => panels.delete(key));
+  groupPanels.set(groupId, panel);
+  panel.onDidDispose(() => groupPanels.delete(groupId));
 
   panel.webview.html = renderHtml(panel.webview, {
     name: group.name,
@@ -369,6 +456,11 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
     if (msg.type === 'favouriteAdded') {
       favouriteFiles.push(msg.file);
       renderFavs();
+    } else if (msg.type === 'checkDirty') {
+      vscode.postMessage({ type: 'dirtyState', requestId: msg.requestId, dirty: !saveBtn.disabled });
+    } else if (msg.type === 'saveNow') {
+      doSave();
+      vscode.postMessage({ type: 'saved', requestId: msg.requestId });
     }
   });
 
@@ -410,13 +502,15 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
     updateDirtyState();
   };
 
-  saveBtn.addEventListener('click', () => {
+  function doSave() {
     const data = collectData();
     vscode.postMessage({ type: 'save', data });
     savedData = { ...data, favouriteFiles: data.favouriteFiles.slice() };
     savedSnapshot = JSON.stringify(savedData);
     setActionButtonsEnabled(false);
-  });
+  }
+
+  saveBtn.addEventListener('click', doSave);
 
   revertBtn.addEventListener('click', () => {
     document.getElementById('name').value = savedData.name;

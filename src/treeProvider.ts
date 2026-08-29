@@ -156,11 +156,6 @@ export class WorkspaceTreeProvider
     item.description = entry.tags.length ? entry.tags.join(', ') : undefined;
     item.tooltip = entry.description || entry.uri;
     item.iconPath = entry.color ? colorDotIcon(entry.color) : new vscode.ThemeIcon('circle-outline');
-    item.command = {
-      command: 'workspaceList.openWorkspace',
-      title: 'Open in New Window',
-      arguments: [entry],
-    };
     if (isCurrentWorkspace(entry)) {
       item.description = `${item.description ? item.description + ' · ' : ''}current`;
     }

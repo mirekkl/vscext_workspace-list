@@ -2,7 +2,7 @@
   "name": "workspace-list",
   "displayName": "Workspace List",
   "description": "Keep a curated list of workspaces with descriptions, tags, and favourite files.",
-  "version": "0.1.15",
+  "version": "0.1.20",
   "publisher": "kodoro",
   "private": true,
   "repository": {
@@ -58,7 +58,8 @@
       },
       {
         "command": "workspaceList.openWorkspace",
-        "title": "Open in New Window"
+        "title": "Open in New Window",
+        "icon": "$(link-external)"
       },
       {
         "command": "workspaceList.editMetadata",
