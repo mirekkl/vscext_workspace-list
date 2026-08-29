@@ -61,32 +61,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('workspaceList.addWorkspace', async () => {
       const picked = await vscode.window.showOpenDialog({
-        canSelectFolders: true,
+        canSelectFolders: false,
         canSelectFiles: true,
         canSelectMany: false,
         openLabel: 'Add to Workspace List',
-        filters: { 'Workspace Files': ['code-workspace'] },
+        filters: { 'Workspace / Folder': ['code-workspace'] },
       });
       if (!picked || !picked[0]) return;
       const uri = picked[0];
-      const isWorkspaceFile = uri.fsPath.endsWith('.code-workspace');
-      await addEntry(store, uri, isWorkspaceFile ? 'workspaceFile' : 'folder');
+      const stat = await vscode.workspace.fs.stat(uri);
+      const isFolder = (stat.type & vscode.FileType.Directory) !== 0;
+      await addEntryAndReveal(store, treeView, uri, isFolder ? 'folder' : 'workspaceFile');
     }),
 
     vscode.commands.registerCommand('workspaceList.addCurrentWorkspace', async () => {
       const wsFile = vscode.workspace.workspaceFile;
       const folders = vscode.workspace.workspaceFolders;
       if (wsFile) {
-        await addEntry(store, wsFile, 'workspaceFile');
+        await addEntryAndReveal(store, treeView, wsFile, 'workspaceFile');
       } else if (folders && folders.length > 0) {
-        await addEntry(store, folders[0].uri, 'folder');
+        await addEntryAndReveal(store, treeView, folders[0].uri, 'folder');
       } else {
         vscode.window.showWarningMessage('No workspace is currently open.');
       }
     }),
 
     vscode.commands.registerCommand('workspaceList.importRecent', async () => {
-      await importFromRecentlyOpened(store);
+      await importFromRecentlyOpened(store, treeView);
     }),
 
     vscode.commands.registerCommand('workspaceList.openWorkspace', async (arg: WorkspaceEntry | WorkspaceNode) => {
@@ -175,14 +176,18 @@ function groupPathLabel(store: WorkspaceStore, group: Group): string {
   return parts.join(' / ');
 }
 
-async function addEntry(store: WorkspaceStore, uri: vscode.Uri, type: WorkspaceEntryType): Promise<void> {
+async function addEntry(
+  store: WorkspaceStore,
+  uri: vscode.Uri,
+  type: WorkspaceEntryType
+): Promise<WorkspaceEntry | undefined> {
   const uriStr = uri.toString();
   if (store.findByUri(uriStr)) {
     vscode.window.showInformationMessage('This workspace is already in the list.');
-    return;
+    return undefined;
   }
   const name = type === 'workspaceFile' ? path.basename(uri.fsPath, '.code-workspace') : path.basename(uri.fsPath);
-  await store.add({
+  const entry = await store.add({
     uri: uriStr,
     type,
     name,
@@ -191,9 +196,24 @@ async function addEntry(store: WorkspaceStore, uri: vscode.Uri, type: WorkspaceE
     favouriteFiles: [],
   });
   vscode.window.showInformationMessage(`Added "${name}" to Workspace List.`);
+  return entry;
 }
 
-async function importFromRecentlyOpened(store: WorkspaceStore): Promise<void> {
+async function addEntryAndReveal(
+  store: WorkspaceStore,
+  treeView: vscode.TreeView<WorkspaceNode | FavouriteFileNode | GroupNode>,
+  uri: vscode.Uri,
+  type: WorkspaceEntryType
+): Promise<void> {
+  const entry = await addEntry(store, uri, type);
+  if (!entry) return;
+  await treeView.reveal(new WorkspaceNode(entry), { select: true, focus: true });
+}
+
+async function importFromRecentlyOpened(
+  store: WorkspaceStore,
+  treeView: vscode.TreeView<WorkspaceNode | FavouriteFileNode | GroupNode>
+): Promise<void> {
   const recent = await (vscode.workspace as unknown as {
     getConfiguration?: unknown;
   });
@@ -243,11 +263,16 @@ async function importFromRecentlyOpened(store: WorkspaceStore): Promise<void> {
   });
   if (!picks || picks.length === 0) return;
 
+  let lastAdded: WorkspaceEntry | undefined;
   for (const pick of picks) {
     const candidate = candidates.find((c) => c.label === pick.label && c.uri.fsPath === pick.description);
     if (candidate) {
-      await addEntry(store, candidate.uri, candidate.type);
+      const entry = await addEntry(store, candidate.uri, candidate.type);
+      if (entry) lastAdded = entry;
     }
+  }
+  if (lastAdded) {
+    await treeView.reveal(new WorkspaceNode(lastAdded), { select: true, focus: true });
   }
 }
 
