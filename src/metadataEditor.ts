@@ -248,8 +248,8 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   ` : ''}
 
   <div id="saveBar">
-    <button id="saveBtn" class="action-btn" disabled>Save</button>
-    <button id="revertBtn" class="action-btn" disabled>Revert</button>
+    <button id="saveBtn" class="action-btn" disabled title="Save (Ctrl+Enter)">Save</button>
+    <button id="revertBtn" class="action-btn" disabled title="Revert (Ctrl+Shift+Enter)">Revert</button>
   </div>
 
 <script nonce="${nonce}">
@@ -355,8 +355,8 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
     return { name, description, tags, color, favouriteFiles };
   }
 
-  const initialData = collectData();
-  const initialSnapshot = JSON.stringify(initialData);
+  let savedData = collectData();
+  let savedSnapshot = JSON.stringify(savedData);
   const saveBtn = document.getElementById('saveBtn');
   const revertBtn = document.getElementById('revertBtn');
 
@@ -368,7 +368,7 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   }
 
   function updateDirtyState() {
-    setActionButtonsEnabled(JSON.stringify(collectData()) !== initialSnapshot);
+    setActionButtonsEnabled(JSON.stringify(collectData()) !== savedSnapshot);
   }
 
   ['name', 'description', 'tags'].forEach((id) => {
@@ -386,20 +386,34 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   };
 
   saveBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'save', data: collectData() });
+    const data = collectData();
+    vscode.postMessage({ type: 'save', data });
+    savedData = { ...data, favouriteFiles: data.favouriteFiles.slice() };
+    savedSnapshot = JSON.stringify(savedData);
     setActionButtonsEnabled(false);
   });
 
   revertBtn.addEventListener('click', () => {
-    document.getElementById('name').value = initialData.name;
-    document.getElementById('description').value = initialData.description;
-    document.getElementById('tags').value = initialData.tags.join(', ');
-    favouriteFiles = initialData.favouriteFiles.slice();
-    applyColor(initialData.color || '#808080', !initialData.color);
+    document.getElementById('name').value = savedData.name;
+    document.getElementById('description').value = savedData.description;
+    document.getElementById('tags').value = savedData.tags.join(', ');
+    favouriteFiles = savedData.favouriteFiles.slice();
+    applyColor(savedData.color || '#808080', !savedData.color);
     origRenderFavs();
     updateNameOverflow();
     setActionButtonsEnabled(false);
   });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.shiftKey) {
+      if (!revertBtn.disabled) revertBtn.click();
+    } else {
+      if (!saveBtn.disabled) saveBtn.click();
+    }
+  }, true);
 </script>
 </body>
 </html>`;
