@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceStore } from './store';
 import { WorkspaceEntry, Group, FavouriteFile } from './types';
+import { colorPickerStyles, colorPickerScript } from './colorPicker/colorPicker';
 
 const panels = new Map<string, vscode.WebviewPanel>();
 
@@ -171,14 +172,17 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   }
   .overflow-arrow.visible { display: flex; }
   .overflow-arrow svg { width: 8px; height: 8px; fill: var(--vscode-descriptionForeground); }
-  .row { display: flex; gap: 8px; align-items: center; }
-  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
-  .swatch {
-    width: 24px; height: 24px; border-radius: 4px; cursor: pointer;
-    border: 2px solid transparent; padding: 0; box-sizing: border-box;
+  .row { display: flex; gap: 8px; align-items: center; position: relative; }
+  .color-dot {
+    width: 24px; height: 24px; min-width: 24px; border-radius: 50%; cursor: pointer;
+    border: 1px solid var(--vscode-settings-textInputBorder, var(--vscode-input-border, transparent));
+    padding: 0;
   }
-  .swatch:hover { border-color: var(--vscode-focusBorder); }
-  .swatch.selected { border-color: var(--vscode-foreground); }
+  input.hex-input {
+    width: 110px; max-width: 110px; flex: 0 0 auto;
+    font-family: var(--vscode-editor-font-family, monospace); text-transform: lowercase;
+  }
+  ${colorPickerStyles()}
   ul#favList { list-style: none; padding: 0; margin: 6px 0; max-width: 640px; }
   ul#favList li {
     display: flex; justify-content: space-between; align-items: center; padding: 6px 9px;
@@ -193,7 +197,15 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
   .remove-btn { background: transparent; color: var(--vscode-errorForeground); padding: 2px 8px; }
   .remove-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
-  #saveBar { padding: 18px 24px; }
+  #saveBar { padding: 18px 24px; display: flex; gap: 8px; }
+  .action-btn {
+    background: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+    opacity: 0.3; cursor: default; color: var(--vscode-button-foreground);
+  }
+  .action-btn.dirty {
+    background: var(--vscode-button-background); opacity: 1; cursor: pointer;
+  }
+  .action-btn.dirty:hover { background: var(--vscode-button-hoverBackground); }
 </style>
 </head>
 <body>
@@ -218,11 +230,11 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   </div>
 
   <div class="field">
-    <label class="field-label" for="color"><span class="category">Workspace:</span> <span class="name">Color</span></label>
-    <div class="field-description">Click a swatch to apply it, or pick a custom color.</div>
-    <div class="swatches" id="swatches"></div>
-    <div class="row" style="margin-top: 8px;">
-      <input type="color" id="color" value="${escapeHtml(data.color || '#808080')}" title="Custom color" />
+    <label class="field-label" for="colorHex"><span class="category">Workspace:</span> <span class="name">Color</span></label>
+    <div class="field-description">Click the dot to open the picker; double-click a color to apply and close, or type a hex code.</div>
+    <div class="row">
+      <button type="button" id="colorDot" class="color-dot" title="Open color picker" aria-label="Open color picker"></button>
+      <input type="text" id="colorHex" class="hex-input" value="${escapeHtml(data.color || '#808080')}" spellcheck="false" />
       <button type="button" id="clearColorBtn" class="secondary">Clear</button>
     </div>
   </div>
@@ -236,10 +248,12 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   ` : ''}
 
   <div id="saveBar">
-    <button id="saveBtn">Save</button>
+    <button id="saveBtn" class="action-btn" disabled>Save</button>
+    <button id="revertBtn" class="action-btn" disabled>Revert</button>
   </div>
 
 <script nonce="${nonce}">
+  ${colorPickerScript()}
   const vscode = acquireVsCodeApi();
   let favouriteFiles = ${JSON.stringify(data.favouriteFiles || [])};
   const showFavourites = ${JSON.stringify(showFavourites)};
@@ -281,34 +295,42 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
     '#d80073', '#a20025', '#647687', '#76608a', '#808080'
   ];
 
+  const HEX_RE = /^#[0-9a-fA-F]{6}$/;
   let colorCleared = ${JSON.stringify(!data.color)};
-  const colorInput = document.getElementById('color');
-  const swatchesEl = document.getElementById('swatches');
+  let currentColorHex = ${JSON.stringify(data.color || '#808080')};
+  const hexInput = document.getElementById('colorHex');
+  const colorDot = document.getElementById('colorDot');
 
-  function renderSwatches() {
-    swatchesEl.innerHTML = '';
-    const current = colorCleared ? '' : colorInput.value.toLowerCase();
-    PRESET_COLORS.forEach((hex) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'swatch' + (hex === current ? ' selected' : '');
-      btn.style.background = hex;
-      btn.title = hex;
-      btn.addEventListener('click', () => {
-        colorCleared = false;
-        colorInput.value = hex;
-        renderSwatches();
-      });
-      swatchesEl.appendChild(btn);
-    });
+  function applyColor(hex, cleared) {
+    colorCleared = cleared;
+    currentColorHex = hex;
+    hexInput.value = hex;
+    colorDot.style.background = hex;
+    picker.setColor(hex);
   }
-  renderSwatches();
 
-  colorInput.addEventListener('input', () => { colorCleared = false; renderSwatches(); });
+  const picker = createColorPicker({
+    trigger: colorDot,
+    initialColor: currentColorHex,
+    presets: PRESET_COLORS,
+    onChange: (hex) => applyColor(hex, false),
+    onCommit: (hex) => applyColor(hex, false),
+  });
+  colorDot.style.background = colorCleared ? '#808080' : currentColorHex;
+
+  hexInput.addEventListener('input', () => {
+    const v = hexInput.value.trim();
+    if (HEX_RE.test(v)) applyColor(v, false);
+  });
+  hexInput.addEventListener('blur', () => {
+    if (!HEX_RE.test(hexInput.value.trim())) {
+      applyColor(currentColorHex, colorCleared);
+    }
+  });
+
   document.getElementById('clearColorBtn').addEventListener('click', () => {
-    colorCleared = true;
-    colorInput.value = '#808080';
-    renderSwatches();
+    picker.close();
+    applyColor('#808080', true);
   });
 
   if (showFavourites) {
@@ -325,12 +347,58 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
     }
   });
 
-  document.getElementById('saveBtn').addEventListener('click', () => {
+  function collectData() {
     const name = document.getElementById('name').value.trim();
     const description = document.getElementById('description').value;
     const tags = document.getElementById('tags').value.split(',').map(s => s.trim()).filter(Boolean);
-    const color = colorCleared ? '' : colorInput.value;
-    vscode.postMessage({ type: 'save', data: { name, description, tags, color, favouriteFiles } });
+    const color = colorCleared ? '' : currentColorHex;
+    return { name, description, tags, color, favouriteFiles };
+  }
+
+  const initialData = collectData();
+  const initialSnapshot = JSON.stringify(initialData);
+  const saveBtn = document.getElementById('saveBtn');
+  const revertBtn = document.getElementById('revertBtn');
+
+  function setActionButtonsEnabled(enabled) {
+    saveBtn.disabled = !enabled;
+    saveBtn.classList.toggle('dirty', enabled);
+    revertBtn.disabled = !enabled;
+    revertBtn.classList.toggle('dirty', enabled);
+  }
+
+  function updateDirtyState() {
+    setActionButtonsEnabled(JSON.stringify(collectData()) !== initialSnapshot);
+  }
+
+  ['name', 'description', 'tags'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', updateDirtyState);
+  });
+  const origApplyColor = applyColor;
+  applyColor = function (hex, cleared) {
+    origApplyColor(hex, cleared);
+    updateDirtyState();
+  };
+  const origRenderFavs = renderFavs;
+  renderFavs = function () {
+    origRenderFavs();
+    updateDirtyState();
+  };
+
+  saveBtn.addEventListener('click', () => {
+    vscode.postMessage({ type: 'save', data: collectData() });
+    setActionButtonsEnabled(false);
+  });
+
+  revertBtn.addEventListener('click', () => {
+    document.getElementById('name').value = initialData.name;
+    document.getElementById('description').value = initialData.description;
+    document.getElementById('tags').value = initialData.tags.join(', ');
+    favouriteFiles = initialData.favouriteFiles.slice();
+    applyColor(initialData.color || '#808080', !initialData.color);
+    origRenderFavs();
+    updateNameOverflow();
+    setActionButtonsEnabled(false);
   });
 </script>
 </body>
