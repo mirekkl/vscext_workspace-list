@@ -59,6 +59,7 @@ export function colorPickerStyles(): string {
     border: 2px solid transparent; padding: 0; box-sizing: border-box;
   }
   .cp-swatch:hover, .cp-swatch:focus { border-color: var(--vscode-focusBorder); }
+  .cp-swatch.selected { border-color: var(--vscode-foreground); }
   .cp-hex-row { display: flex; gap: 6px; align-items: center; }
   .cp-hex-input {
     flex: 1 1 auto; min-width: 0; font-family: var(--vscode-editor-font-family, monospace);
@@ -113,9 +114,9 @@ export function colorPickerScript(): string {
     popover.className = 'cp-popover';
     popover.innerHTML =
       '<div class="cp-hint">Click to preview, double-click to apply and close.</div>' +
+      '<div class="cp-swatches"></div>' +
       '<div class="cp-sv"><div class="cp-sv-thumb"></div></div>' +
       '<div class="cp-hue"><div class="cp-hue-thumb"></div></div>' +
-      '<div class="cp-swatches"></div>' +
       '<div class="cp-hex-row"><input type="text" class="cp-hex-input" spellcheck="false" /></div>';
     document.body.appendChild(popover);
 
@@ -148,14 +149,18 @@ export function colorPickerScript(): string {
       hexInput.value = hex;
     }
 
+    const swatchButtons = [];
+
     function renderSwatches() {
       swatchesEl.innerHTML = '';
+      swatchButtons.length = 0;
       presets.forEach((hex) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'cp-swatch';
         btn.style.background = hex;
         btn.title = hex;
+        btn.dataset.hex = hex.toLowerCase();
         btn.addEventListener('click', () => {
           hsv = hexToHsv(hex);
           refresh();
@@ -167,6 +172,14 @@ export function colorPickerScript(): string {
           commitAndClose();
         });
         swatchesEl.appendChild(btn);
+        swatchButtons.push(btn);
+      });
+    }
+
+    function updateSelectedSwatch() {
+      const hex = currentHex().toLowerCase();
+      swatchButtons.forEach((btn) => {
+        btn.classList.toggle('selected', btn.dataset.hex === hex);
       });
     }
 
@@ -174,6 +187,7 @@ export function colorPickerScript(): string {
       updateSvBackground();
       positionThumbs();
       syncHex(currentHex());
+      updateSelectedSwatch();
     }
 
     function commitAndClose() {

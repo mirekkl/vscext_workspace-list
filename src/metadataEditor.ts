@@ -173,6 +173,13 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   .overflow-arrow.visible { display: flex; }
   .overflow-arrow svg { width: 8px; height: 8px; fill: var(--vscode-descriptionForeground); }
   .row { display: flex; gap: 8px; align-items: center; position: relative; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; max-width: 640px; }
+  .swatch {
+    width: 24px; height: 24px; border-radius: 4px; cursor: pointer;
+    border: 2px solid transparent; padding: 0; box-sizing: border-box;
+  }
+  .swatch:hover { border-color: var(--vscode-focusBorder); }
+  .swatch.selected { border-color: var(--vscode-foreground); }
   .color-dot {
     width: 24px; height: 24px; min-width: 24px; border-radius: 50%; cursor: pointer;
     border: 1px solid var(--vscode-settings-textInputBorder, var(--vscode-input-border, transparent));
@@ -231,8 +238,9 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
 
   <div class="field">
     <label class="field-label" for="colorHex"><span class="category">Workspace:</span> <span class="name">Color</span></label>
-    <div class="field-description">Click the dot to open the picker; double-click a color to apply and close, or type a hex code.</div>
-    <div class="row">
+    <div class="field-description">Click a swatch to apply it, or click the dot to open the picker; double-click a color there to apply and close, or type a hex code.</div>
+    <div class="swatches" id="swatches"></div>
+    <div class="row" style="margin-top: 8px;">
       <button type="button" id="colorDot" class="color-dot" title="Open color picker" aria-label="Open color picker"></button>
       <input type="text" id="colorHex" class="hex-input" value="${escapeHtml(data.color || '#808080')}" spellcheck="false" />
       <button type="button" id="clearColorBtn" class="secondary">Clear</button>
@@ -292,7 +300,7 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   const PRESET_COLORS = [
     '#e51400', '#fa6800', '#f0a30a', '#6a8f00', '#00a300',
     '#00aba9', '#1ba1e2', '#0050ef', '#6a00ff', '#aa00ff',
-    '#d80073', '#a20025', '#647687', '#76608a', '#808080'
+    '#d80073', '#a20025', '#647687', '#76608a', '#808080', '#000000'
   ];
 
   const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -300,6 +308,21 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   let currentColorHex = ${JSON.stringify(data.color || '#808080')};
   const hexInput = document.getElementById('colorHex');
   const colorDot = document.getElementById('colorDot');
+  const swatchesEl = document.getElementById('swatches');
+
+  function renderInlineSwatches() {
+    const current = colorCleared ? '' : currentColorHex.toLowerCase();
+    swatchesEl.innerHTML = '';
+    PRESET_COLORS.forEach((hex) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'swatch' + (hex.toLowerCase() === current ? ' selected' : '');
+      btn.style.background = hex;
+      btn.title = hex;
+      btn.addEventListener('click', () => applyColor(hex, false));
+      swatchesEl.appendChild(btn);
+    });
+  }
 
   function applyColor(hex, cleared) {
     colorCleared = cleared;
@@ -307,6 +330,7 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
     hexInput.value = hex;
     colorDot.style.background = hex;
     picker.setColor(hex);
+    renderInlineSwatches();
   }
 
   const picker = createColorPicker({
@@ -317,6 +341,7 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
     onCommit: (hex) => applyColor(hex, false),
   });
   colorDot.style.background = colorCleared ? '#808080' : currentColorHex;
+  renderInlineSwatches();
 
   hexInput.addEventListener('input', () => {
     const v = hexInput.value.trim();
