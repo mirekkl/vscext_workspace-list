@@ -7,8 +7,11 @@ A VS Code extension that maintains a curated list of workspaces (folders / `.cod
 - Add folders or `.code-workspace` files to a persistent list, or import from VS Code's Recently Opened.
 - Organize entries into nested groups via drag-and-drop.
 - Attach a description, tags, a color, and favourite files to each entry.
+- Distinct icons for groups, `.code-workspace` entries, and plain folder entries, tinted with each entry's color.
+- Single-click selects an entry (and follows it in an open metadata editor); double-click opens it in a new window.
 - Filter the list by name, description, or tag.
 - Opens workspaces in a new window (never replaces the current one).
+- Newly added entries are revealed and selected automatically.
 
 See [SPEC.md](SPEC.md) for the full design spec.
 
