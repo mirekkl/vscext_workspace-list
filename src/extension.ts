@@ -24,24 +24,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(treeView);
 
   const DOUBLE_CLICK_MS = 500;
-  let lastSelectedId: string | undefined;
-  let lastSelectedAt = 0;
+  let lastClickedId: string | undefined;
+  let lastClickedAt = 0;
   context.subscriptions.push(
-    treeView.onDidChangeSelection((e) => {
-      const node = e.selection[0];
-      if (!(node instanceof WorkspaceNode)) {
-        lastSelectedId = undefined;
-        return;
-      }
+    vscode.commands.registerCommand('workspaceList.entryClicked', (entry: WorkspaceEntry) => {
       const now = Date.now();
-      const isDoubleClick = lastSelectedId === node.entry.id && now - lastSelectedAt < DOUBLE_CLICK_MS;
-      lastSelectedId = node.entry.id;
-      lastSelectedAt = now;
+      const isDoubleClick = lastClickedId === entry.id && now - lastClickedAt < DOUBLE_CLICK_MS;
+      lastClickedId = entry.id;
+      lastClickedAt = now;
       if (isDoubleClick) {
-        lastSelectedId = undefined;
-        void vscode.commands.executeCommand('workspaceList.openWorkspace', node);
+        lastClickedId = undefined;
+        void vscode.commands.executeCommand('workspaceList.openWorkspace', entry);
       } else if (isEntryMetadataEditorOpen()) {
-        void switchOrOpenMetadataEditor(context, store, node.entry.id);
+        void switchOrOpenMetadataEditor(context, store, entry.id);
       }
     })
   );

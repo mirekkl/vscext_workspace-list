@@ -159,6 +159,11 @@ export class WorkspaceTreeProvider
     if (isCurrentWorkspace(entry)) {
       item.description = `${item.description ? item.description + ' · ' : ''}current`;
     }
+    item.command = {
+      command: 'workspaceList.entryClicked',
+      title: 'Select',
+      arguments: [entry],
+    };
     return item;
   }
 
