@@ -3,4 +3,5 @@ dist
 node_modules
 *.vsix
 temp/
-history/
+.history/
+*.code-workspace
