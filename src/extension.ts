@@ -7,8 +7,9 @@ import {
   openGroupMetadataEditor,
   isEntryMetadataEditorOpen,
   switchOrOpenMetadataEditor,
+  refreshEntryPanelIfShowing,
 } from './metadataEditor';
-import { WorkspaceEntry, WorkspaceEntryType, Group } from './types';
+import { WorkspaceEntry, WorkspaceEntryType, Group, FavouriteFile } from './types';
 import { checkForUpdateCommand, checkForUpdateOnStartup, createUpdateStatusBarItem } from './update';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -22,6 +23,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     dragAndDropController: treeProvider,
   });
   context.subscriptions.push(treeView);
+
+  context.subscriptions.push(
+    treeView.onDidExpandElement((e) => {
+      if (e.element instanceof GroupNode) {
+        treeProvider.setGroupCollapsed(e.element.group.id, false);
+      }
+    }),
+    treeView.onDidCollapseElement((e) => {
+      if (e.element instanceof GroupNode) {
+        treeProvider.setGroupCollapsed(e.element.group.id, true);
+      }
+    })
+  );
 
   const DOUBLE_CLICK_MS = 500;
   let lastClickedId: string | undefined;
@@ -112,6 +126,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (confirm === 'Remove') {
         await store.remove(entry.id);
       }
+    }),
+
+    vscode.commands.registerCommand('workspaceList.addFavouriteFile', async (node: WorkspaceNode) => {
+      const entry = node instanceof WorkspaceNode ? node.entry : (node as unknown as { entry: WorkspaceEntry }).entry;
+      const base = entry.type === 'folder' ? vscode.Uri.parse(entry.uri) : undefined;
+      const picked = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        defaultUri: base,
+        openLabel: 'Add as favourite',
+      });
+      if (!picked || !picked[0]) return;
+      const fav: FavouriteFile = {
+        path: picked[0].fsPath,
+        label: path.basename(picked[0].fsPath),
+      };
+      const current = store.get(entry.id);
+      if (!current) return;
+      await store.update(entry.id, { favouriteFiles: [...current.favouriteFiles, fav] });
+      refreshEntryPanelIfShowing(store, entry.id);
     }),
 
     vscode.commands.registerCommand('workspaceList.openFavouriteFile', async (node: FavouriteFileNode) => {

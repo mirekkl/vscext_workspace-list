@@ -2,7 +2,7 @@
   "name": "workspace-list",
   "displayName": "Workspace List",
   "description": "Keep a curated list of workspaces with descriptions, tags, and favourite files.",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "publisher": "kodoro",
   "private": true,
   "repository": {
@@ -74,6 +74,11 @@
       {
         "command": "workspaceList.openFavouriteFile",
         "title": "Open File"
+      },
+      {
+        "command": "workspaceList.addFavouriteFile",
+        "title": "Add Favourite File...",
+        "icon": "$(star-add)"
       },
       {
         "command": "workspaceList.filter",
@@ -170,9 +175,14 @@
           "group": "inline@2"
         },
         {
-          "command": "workspaceList.removeWorkspace",
+          "command": "workspaceList.addFavouriteFile",
           "when": "view == workspaceList.view && viewItem == workspaceEntry",
           "group": "inline@3"
+        },
+        {
+          "command": "workspaceList.removeWorkspace",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "inline@4"
         },
         {
           "command": "workspaceList.openWorkspace",
@@ -181,6 +191,11 @@
         },
         {
           "command": "workspaceList.editMetadata",
+          "when": "view == workspaceList.view && viewItem == workspaceEntry",
+          "group": "2_edit"
+        },
+        {
+          "command": "workspaceList.addFavouriteFile",
           "when": "view == workspaceList.view && viewItem == workspaceEntry",
           "group": "2_edit"
         },

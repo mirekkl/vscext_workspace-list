@@ -16,6 +16,14 @@ export function isEntryMetadataEditorOpen(): boolean {
   return entryPanel !== undefined;
 }
 
+/** If the entry-metadata panel is open for `entryId`, reloads it from the store so it reflects external changes. */
+export function refreshEntryPanelIfShowing(store: WorkspaceStore, entryId: string): void {
+  if (!entryPanel || entryPanelEntryId !== entryId) return;
+  const entry = store.get(entryId);
+  if (!entry) return;
+  loadEntryIntoPanel(entryPanel, store, entry);
+}
+
 let requestCounter = 0;
 
 function postAndAwait<T extends { type: string }>(
