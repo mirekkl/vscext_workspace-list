@@ -54,7 +54,7 @@ function osFolderIcon(hex?: string): vscode.Uri {
   return vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
 }
 
-function isCurrentWorkspace(entry: WorkspaceEntry): boolean {
+export function isCurrentWorkspace(entry: WorkspaceEntry): boolean {
   const folders = vscode.workspace.workspaceFolders;
   if (entry.type === 'folder' && folders && folders.length > 0) {
     return folders.some((f) => f.uri.toString() === entry.uri);

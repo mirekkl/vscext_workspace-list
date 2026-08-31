@@ -2,7 +2,7 @@
   "name": "workspace-list",
   "displayName": "Workspace List",
   "description": "Keep a curated list of workspaces with descriptions, tags, and favourite files.",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "publisher": "kodoro",
   "private": true,
   "repository": {
@@ -113,6 +113,15 @@
         "command": "workspaceList.checkForUpdates",
         "title": "Workspace List: Check for Updates...",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "workspaceList.about",
+        "title": "About",
+        "icon": "$(info)"
+      },
+      {
+        "command": "workspaceList.addTabToFavourites",
+        "title": "Add to Workspace List"
       }
     ],
     "menus": {
@@ -161,6 +170,17 @@
           "command": "workspaceList.checkForUpdates",
           "when": "view == workspaceList.view",
           "group": "overflow@3"
+        },
+        {
+          "command": "workspaceList.about",
+          "when": "view == workspaceList.view",
+          "group": "overflow@4"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "workspaceList.addTabToFavourites",
+          "group": "1_workspaceList"
         }
       ],
       "view/item/context": [

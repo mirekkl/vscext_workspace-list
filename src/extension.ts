@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceStore } from './store';
-import { WorkspaceTreeProvider, WorkspaceNode, FavouriteFileNode, GroupNode } from './treeProvider';
+import { WorkspaceTreeProvider, WorkspaceNode, FavouriteFileNode, GroupNode, isCurrentWorkspace } from './treeProvider';
 import {
   openMetadataEditor,
   openGroupMetadataEditor,
@@ -147,6 +147,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       refreshEntryPanelIfShowing(store, entry.id);
     }),
 
+    vscode.commands.registerCommand('workspaceList.addTabToFavourites', async (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (!target) return;
+      const entry = store.getAll().find((e) => isCurrentWorkspace(e));
+      if (!entry) {
+        vscode.window.showWarningMessage('This file is not part of a workspace tracked in Workspace List.');
+        return;
+      }
+      const fav: FavouriteFile = {
+        path: target.fsPath,
+        label: path.basename(target.fsPath),
+      };
+      const current = store.get(entry.id);
+      if (!current) return;
+      if (current.favouriteFiles.some((f) => f.path === fav.path)) return;
+      await store.update(entry.id, { favouriteFiles: [...current.favouriteFiles, fav] });
+      refreshEntryPanelIfShowing(store, entry.id);
+    }),
+
     vscode.commands.registerCommand('workspaceList.openFavouriteFile', async (node: FavouriteFileNode) => {
       const uri = vscode.Uri.file(node.file.path);
       const doc = await vscode.workspace.openTextDocument(uri);
@@ -193,6 +212,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand('workspaceList.checkForUpdates', () => checkForUpdateCommand())
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('workspaceList.about', () =>
+      vscode.commands.executeCommand('extension.open', 'kodoro.workspace-list')
+    )
   );
 
   createUpdateStatusBarItem(context);
