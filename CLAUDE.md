@@ -14,6 +14,8 @@ A VS Code extension ("Workspace List") that maintains a curated list of workspac
 - No test suite or linter is currently configured.
 - To try the extension: open this folder in VS Code and press F5 (Run Extension) to launch an Extension Development Host, or package with `npx vsce package` and install the `.vsix` via "Extensions: Install from VSIX...".
 - **Bump `version` in `package.json` before every `vsce package`** — installed VSIX extensions are frozen at package time, and reusing the same filename/version makes it impossible to tell whether a reinstalled build is actually fresh.
+- **Every push to GitHub must bump the version and publish a matching GitHub Release** (`git tag vX.Y.Z && git push origin vX.Y.Z`, then `gh release create vX.Y.Z <vsix> --title vX.Y.Z --notes "..."`) — `src/update.ts`'s self-update check compares against the latest *Release*, not commits or tags alone; pushing commits without a release makes "Check for Updates" report the extension is current when it isn't (hit this after v0.1.33: commit was pushed but no release existed, so the update check kept reporting current).
+- **Build the `.vsix` locally** (`npm run package && npx vsce package`) and attach that exact file to the GitHub Release as an asset — don't rely on GitHub's auto-generated source archives for distribution.
 
 ## Architecture
 
