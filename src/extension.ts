@@ -74,13 +74,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('workspaceList.clearFilter', () => treeProvider.clearFilter()),
 
     vscode.commands.registerCommand('workspaceList.addWorkspace', async () => {
-      const picked = await vscode.window.showOpenDialog({
-        canSelectFolders: false,
-        canSelectFiles: true,
-        canSelectMany: false,
-        openLabel: 'Add to Workspace List',
-        filters: { 'Workspace / Folder': ['code-workspace'] },
-      });
+      const choice = await vscode.window.showQuickPick(
+        [
+          { label: 'Folder', description: 'Add a plain OS folder', target: 'folder' as const },
+          { label: '.code-workspace File', description: 'Add a multi-root workspace file', target: 'workspaceFile' as const },
+        ],
+        { placeHolder: 'What do you want to add to the Workspace List?' }
+      );
+      if (!choice) return;
+
+      const picked = await vscode.window.showOpenDialog(
+        choice.target === 'folder'
+          ? {
+              canSelectFolders: true,
+              canSelectFiles: false,
+              canSelectMany: false,
+              openLabel: 'Add Folder to Workspace List',
+            }
+          : {
+              canSelectFolders: false,
+              canSelectFiles: true,
+              canSelectMany: false,
+              openLabel: 'Add Workspace File to Workspace List',
+              filters: { 'Workspace': ['code-workspace'] },
+            }
+      );
       if (!picked || !picked[0]) return;
       const uri = picked[0];
       const stat = await vscode.workspace.fs.stat(uri);
