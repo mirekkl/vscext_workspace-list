@@ -37,6 +37,10 @@ Since this isn't published to the Marketplace, VS Code won't update it automatic
 - You can check manually any time via the Command Palette: **Workspace List: Check for Updates...**, or from the view's `...` overflow menu.
 - Clicking **Update** (or the status bar item) downloads the new `.vsix` and installs it in place; you'll be prompted to reload the window afterward.
 
+### Syncing to all VS Code profiles
+
+The extension's version is tracked independently per VS Code profile — installing/updating it in one profile doesn't affect the others. To bring every profile on the machine up to the latest GitHub release in one step, use **Sync Extension to All Profiles...** from the view's `...` overflow menu (or run `scripts/sync-all-profiles.ps1`, which does the same thing from a terminal — useful for a brand-new profile that doesn't have the extension installed yet, since a command inside the extension can't run in a profile where it isn't installed).
+
 ## Development
 
 - `npm run compile` — type-check only (`tsc --noEmit`), no output emitted.

@@ -2,7 +2,7 @@
   "name": "workspace-list",
   "displayName": "Workspace List",
   "description": "Keep a curated list of workspaces with descriptions, tags, and favourite files.",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "publisher": "kodoro",
   "private": true,
   "repository": {
@@ -115,6 +115,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "workspaceList.syncAllProfiles",
+        "title": "Sync Extension to All Profiles...",
+        "icon": "$(sync)"
+      },
+      {
         "command": "workspaceList.about",
         "title": "About",
         "icon": "$(info)"
@@ -172,9 +177,14 @@
           "group": "overflow@3"
         },
         {
-          "command": "workspaceList.about",
+          "command": "workspaceList.syncAllProfiles",
           "when": "view == workspaceList.view",
           "group": "overflow@4"
+        },
+        {
+          "command": "workspaceList.about",
+          "when": "view == workspaceList.view",
+          "group": "overflow@5"
         }
       ],
       "editor/title/context": [

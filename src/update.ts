@@ -143,6 +143,103 @@ export async function checkForUpdateCommand(): Promise<void> {
   await promptUpdate(update);
 }
 
+interface VsCodeProfile {
+  name?: string;
+}
+
+function getProfileNames(): (string | undefined)[] {
+  // Always includes the unnamed default profile (undefined = no --profile flag).
+  const names: (string | undefined)[] = [undefined];
+  const storageJson = path.join(os.homedir(), 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'storage.json');
+  try {
+    const raw = require('fs').readFileSync(storageJson, 'utf8');
+    const data = JSON.parse(raw) as { userDataProfiles?: VsCodeProfile[] };
+    for (const p of data.userDataProfiles ?? []) {
+      if (p.name) names.push(p.name);
+    }
+  } catch {
+    // Best-effort: if storage.json can't be read, only the default profile is synced.
+  }
+  return names;
+}
+
+function runCodeCli(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const cp = require('child_process').spawn('code', args, { shell: true });
+    let stdout = '';
+    cp.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+    cp.on('error', reject);
+    cp.on('close', () => resolve(stdout));
+  });
+}
+
+async function getInstalledVersionInProfile(profile: string | undefined): Promise<string | undefined> {
+  const args = profile ? ['--profile', profile] : [];
+  args.push('--list-extensions', '--show-versions');
+  const output = await runCodeCli(args);
+  const line = output.split(/\r?\n/).find((l) => l.startsWith(`${EXTENSION_ID}@`));
+  return line?.split('@')[1];
+}
+
+export async function syncAllProfilesCommand(): Promise<void> {
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Workspace List: syncing all profiles...', cancellable: false },
+    async (progress) => {
+      const release = await fetchLatestRelease();
+      if (!release) {
+        vscode.window.showErrorMessage('Could not reach GitHub to check the latest Workspace List release.');
+        return;
+      }
+      const asset = release.assets.find((a) => a.name.endsWith('.vsix'));
+      if (!asset) {
+        vscode.window.showErrorMessage('Latest release has no .vsix asset attached.');
+        return;
+      }
+      const latestVersion = release.tag_name.replace(/^v/, '');
+
+      progress.report({ message: 'Checking installed versions across profiles...' });
+      const profiles = getProfileNames();
+      const targets: (string | undefined)[] = [];
+      for (const profile of profiles) {
+        const installed = await getInstalledVersionInProfile(profile);
+        if (!installed || isNewer(latestVersion, installed)) {
+          targets.push(profile);
+        }
+      }
+
+      if (targets.length === 0) {
+        vscode.window.showInformationMessage(`All ${profiles.length} profile(s) already have Workspace List ${latestVersion}.`);
+        return;
+      }
+
+      progress.report({ message: `Downloading ${asset.name}...` });
+      const res = await fetch(asset.browser_download_url);
+      if (!res.ok) {
+        throw new Error(`Failed to download update (HTTP ${res.status}).`);
+      }
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'workspace-list-sync-'));
+      const tmpFile = path.join(tmpDir, asset.name);
+      await fs.writeFile(tmpFile, buffer);
+
+      try {
+        for (const profile of targets) {
+          progress.report({ message: `Installing into profile ${profile ?? '(default)'}...` });
+          const args = profile ? ['--profile', profile] : [];
+          args.push('--install-extension', tmpFile, '--force');
+          await runCodeCli(args);
+        }
+      } finally {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      }
+
+      vscode.window.showInformationMessage(
+        `Workspace List ${latestVersion} installed/updated in ${targets.length} of ${profiles.length} profile(s). Reload those windows to finish.`
+      );
+    }
+  );
+}
+
 export async function checkForUpdateOnStartup(context: vscode.ExtensionContext): Promise<void> {
   const lastCheck = context.globalState.get<number>(LAST_CHECK_KEY, 0);
   if (Date.now() - lastCheck < CHECK_INTERVAL_MS) return;

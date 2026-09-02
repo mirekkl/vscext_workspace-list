@@ -10,7 +10,7 @@ import {
   refreshEntryPanelIfShowing,
 } from './metadataEditor';
 import { WorkspaceEntry, WorkspaceEntryType, Group, FavouriteFile } from './types';
-import { checkForUpdateCommand, checkForUpdateOnStartup, createUpdateStatusBarItem } from './update';
+import { checkForUpdateCommand, checkForUpdateOnStartup, createUpdateStatusBarItem, syncAllProfilesCommand } from './update';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const store = new WorkspaceStore(context);
@@ -230,6 +230,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand('workspaceList.checkForUpdates', () => checkForUpdateCommand())
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('workspaceList.syncAllProfiles', () => syncAllProfilesCommand())
   );
 
   context.subscriptions.push(
