@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceStore } from './store';
 import { WorkspaceEntry, FavouriteFile, Group } from './types';
+import { refreshEntryPanelIfShowing } from './metadataEditor';
 
 type TreeNode = WorkspaceNode | FavouriteFileNode | GroupNode;
 
@@ -21,6 +22,7 @@ export class GroupNode {
 }
 
 const DRAG_MIME = 'application/vnd.code.tree.workspacelist';
+const URI_LIST_MIME = 'text/uri-list';
 
 const DEFAULT_ICON_COLOR = '#c5c5c5';
 const DEFAULT_GROUP_COLOR = '#dcb67a';
@@ -54,6 +56,13 @@ function osFolderIcon(hex?: string): vscode.Uri {
   return vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
 }
 
+// Plain file - used for favourite file entries, tinted by the favourite's own color.
+function fileIcon(hex?: string): vscode.Uri {
+  const fill = safeHex(hex);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M3.5 1.5h6l3 3v10a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-12a1 1 0 0 1 1-1Z" fill="${fill}"/><path d="M9.5 1.5v3h3Z" fill="${fill}" opacity="0.55"/></svg>`;
+  return vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
+}
+
 export function isCurrentWorkspace(entry: WorkspaceEntry): boolean {
   const folders = vscode.workspace.workspaceFolders;
   if (entry.type === 'folder' && folders && folders.length > 0) {
@@ -71,7 +80,7 @@ export class WorkspaceTreeProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  readonly dropMimeTypes = [DRAG_MIME];
+  readonly dropMimeTypes = [DRAG_MIME, URI_LIST_MIME];
   readonly dragMimeTypes = [DRAG_MIME];
 
   private filterText = '';
@@ -214,17 +223,17 @@ export class WorkspaceTreeProvider
     const label = node.file.label || path.basename(node.file.path);
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     item.contextValue = 'favouriteFile';
-    item.iconPath = new vscode.ThemeIcon('file');
-    item.tooltip = node.file.path;
+    item.iconPath = fileIcon(node.file.color);
+    item.tooltip = node.file.description || node.file.path;
+    const tags = node.file.tags?.length ? node.file.tags.join(', ') : undefined;
     const openable = isCurrentWorkspace(node.entry);
+    item.description = [tags, openable ? undefined : '(open workspace to use)'].filter(Boolean).join(' · ') || undefined;
     if (openable) {
       item.command = {
         command: 'workspaceList.openFavouriteFile',
         title: 'Open File',
         arguments: [node],
       };
-    } else {
-      item.description = '(open workspace to use)';
     }
     return item;
   }
@@ -239,7 +248,10 @@ export class WorkspaceTreeProvider
 
   async handleDrop(target: TreeNode | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
     const item = dataTransfer.get(DRAG_MIME);
-    if (!item) return;
+    if (!item) {
+      await this.handleFileDrop(target, dataTransfer);
+      return;
+    }
     const dragged = JSON.parse(await item.asString()) as Array<{ kind: 'group' | 'workspace'; id: string }>;
 
     if (target === undefined) {
@@ -280,5 +292,40 @@ export class WorkspaceTreeProvider
         'after'
       );
     }
+  }
+
+  // Dragging an editor tab (or a file from the OS) onto a workspace entry row adds it as a favourite file.
+  private async handleFileDrop(target: TreeNode | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
+    if (!target || target.kind !== 'workspace') return;
+    const uriListItem = dataTransfer.get(URI_LIST_MIME);
+    if (!uriListItem) return;
+    const raw = await uriListItem.asString();
+    const uris = raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'));
+    if (uris.length === 0) return;
+
+    const entry = target.entry;
+    const current = this.store.get(entry.id);
+    if (!current) return;
+
+    const additions: FavouriteFile[] = [];
+    for (const raw of uris) {
+      let uri: vscode.Uri;
+      try {
+        uri = vscode.Uri.parse(raw, true);
+      } catch {
+        continue;
+      }
+      if (uri.scheme !== 'file') continue;
+      const filePath = uri.fsPath;
+      if (current.favouriteFiles.some((f) => f.path === filePath) || additions.some((f) => f.path === filePath)) continue;
+      additions.push({ path: filePath, label: path.basename(filePath) });
+    }
+    if (additions.length === 0) return;
+
+    await this.store.update(entry.id, { favouriteFiles: [...current.favouriteFiles, ...additions] });
+    refreshEntryPanelIfShowing(this.store, entry.id);
   }
 }

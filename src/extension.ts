@@ -5,6 +5,7 @@ import { WorkspaceTreeProvider, WorkspaceNode, FavouriteFileNode, GroupNode, isC
 import {
   openMetadataEditor,
   openGroupMetadataEditor,
+  openFavouriteFileMetadataEditor,
   isEntryMetadataEditorOpen,
   switchOrOpenMetadataEditor,
   refreshEntryPanelIfShowing,
@@ -155,13 +156,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         openLabel: 'Add as favourite',
       });
       if (!picked || !picked[0]) return;
-      const fav: FavouriteFile = {
-        path: picked[0].fsPath,
-        label: path.basename(picked[0].fsPath),
-      };
-      const current = store.get(entry.id);
-      if (!current) return;
-      await store.update(entry.id, { favouriteFiles: [...current.favouriteFiles, fav] });
+      await addFavouriteFileToEntry(store, entry.id, picked[0]);
       refreshEntryPanelIfShowing(store, entry.id);
     }),
 
@@ -173,14 +168,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.window.showWarningMessage('This file is not part of a workspace tracked in Workspace List.');
         return;
       }
-      const fav: FavouriteFile = {
-        path: target.fsPath,
-        label: path.basename(target.fsPath),
-      };
-      const current = store.get(entry.id);
-      if (!current) return;
-      if (current.favouriteFiles.some((f) => f.path === fav.path)) return;
-      await store.update(entry.id, { favouriteFiles: [...current.favouriteFiles, fav] });
+      await addFavouriteFileToEntry(store, entry.id, target);
+      refreshEntryPanelIfShowing(store, entry.id);
+    }),
+
+    vscode.commands.registerCommand('workspaceList.addActiveFileToFavourites', async (node: WorkspaceNode) => {
+      const entry = node instanceof WorkspaceNode ? node.entry : (node as unknown as { entry: WorkspaceEntry }).entry;
+      const target = vscode.window.activeTextEditor?.document.uri;
+      if (!target) {
+        vscode.window.showWarningMessage('No active file to add.');
+        return;
+      }
+      await addFavouriteFileToEntry(store, entry.id, target);
       refreshEntryPanelIfShowing(store, entry.id);
     }),
 
@@ -188,6 +187,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const uri = vscode.Uri.file(node.file.path);
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc);
+    }),
+
+    vscode.commands.registerCommand('workspaceList.editFavouriteFileMetadata', (node: FavouriteFileNode) => {
+      openFavouriteFileMetadataEditor(context, store, node.entry.id, node.file.path);
+    }),
+
+    vscode.commands.registerCommand('workspaceList.removeFavouriteFile', async (node: FavouriteFileNode) => {
+      const entry = node.entry;
+      const current = store.get(entry.id);
+      if (!current) return;
+      await store.update(entry.id, {
+        favouriteFiles: current.favouriteFiles.filter((f) => f.path !== node.file.path),
+      });
+      refreshEntryPanelIfShowing(store, entry.id);
     }),
 
     vscode.commands.registerCommand('workspaceList.addGroup', async (node?: GroupNode) => {
@@ -244,6 +257,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   createUpdateStatusBarItem(context);
   void checkForUpdateOnStartup(context);
+}
+
+export async function addFavouriteFileToEntry(store: WorkspaceStore, entryId: string, uri: vscode.Uri): Promise<void> {
+  const current = store.get(entryId);
+  if (!current) return;
+  const filePath = uri.fsPath;
+  if (current.favouriteFiles.some((f) => f.path === filePath)) return;
+  const fav: FavouriteFile = { path: filePath, label: path.basename(filePath) };
+  await store.update(entryId, { favouriteFiles: [...current.favouriteFiles, fav] });
 }
 
 function groupPathLabel(store: WorkspaceStore, group: Group): string {

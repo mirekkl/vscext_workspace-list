@@ -5,6 +5,11 @@ import { WorkspaceEntry, Group, FavouriteFile } from './types';
 import { colorPickerStyles, colorPickerScript } from './colorPicker/colorPicker';
 
 const groupPanels = new Map<string, vscode.WebviewPanel>();
+const favouriteFilePanels = new Map<string, vscode.WebviewPanel>();
+
+function favouriteFileKey(entryId: string, filePath: string): string {
+  return `${entryId}::${filePath}`;
+}
 
 /** Single reusable panel for workspace-entry metadata: switching entries rebinds it in place. */
 let entryPanel: vscode.WebviewPanel | undefined;
@@ -123,6 +128,7 @@ function loadEntryIntoPanel(panel: vscode.WebviewPanel, store: WorkspaceStore, e
   entryPanelEntryId = entry.id;
   panel.title = `Edit: ${entry.name}`;
   panel.webview.html = renderHtml(panel.webview, {
+    category: 'Workspace',
     name: entry.name,
     description: entry.description,
     tags: entry.tags,
@@ -190,6 +196,7 @@ export function openGroupMetadataEditor(context: vscode.ExtensionContext, store:
   panel.onDidDispose(() => groupPanels.delete(groupId));
 
   panel.webview.html = renderHtml(panel.webview, {
+    category: 'Group',
     name: group.name,
     description: group.description,
     tags: group.tags,
@@ -211,7 +218,73 @@ export function openGroupMetadataEditor(context: vscode.ExtensionContext, store:
   });
 }
 
+export function openFavouriteFileMetadataEditor(
+  context: vscode.ExtensionContext,
+  store: WorkspaceStore,
+  entryId: string,
+  filePath: string
+): void {
+  const key = favouriteFileKey(entryId, filePath);
+  const existing = favouriteFilePanels.get(key);
+  if (existing) {
+    existing.reveal();
+    return;
+  }
+
+  const entry = store.get(entryId);
+  const file = entry?.favouriteFiles.find((f) => f.path === filePath);
+  if (!entry || !file) {
+    vscode.window.showErrorMessage('Favourite file not found.');
+    return;
+  }
+
+  const label = file.label || path.basename(file.path);
+  const panel = vscode.window.createWebviewPanel(
+    'workspaceList.editFavouriteFileMetadata',
+    `Edit File: ${label}`,
+    vscode.ViewColumn.Active,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  favouriteFilePanels.set(key, panel);
+  panel.onDidDispose(() => {
+    if (favouriteFilePanels.get(key) === panel) {
+      favouriteFilePanels.delete(key);
+    }
+  });
+
+  panel.webview.html = renderHtml(panel.webview, {
+    category: 'File',
+    name: label,
+    description: file.description || '',
+    tags: file.tags || [],
+    color: file.color || '',
+    favouriteFiles: undefined,
+  });
+
+  panel.webview.onDidReceiveMessage(async (msg) => {
+    if (msg.type === 'save') {
+      const current = store.get(entryId);
+      if (!current) return;
+      const updated = current.favouriteFiles.map((f) =>
+        f.path === filePath
+          ? {
+              ...f,
+              label: msg.data.name || undefined,
+              description: msg.data.description,
+              tags: msg.data.tags,
+              color: msg.data.color || undefined,
+            }
+          : f
+      );
+      await store.update(entryId, { favouriteFiles: updated });
+      panel.title = `Edit File: ${msg.data.name || path.basename(filePath)}`;
+      vscode.window.showInformationMessage(`Saved "${msg.data.name || path.basename(filePath)}".`);
+    }
+  });
+}
+
 interface EditorData {
+  category: string;
   name: string;
   description: string;
   tags: string[];
@@ -312,7 +385,7 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
 </head>
 <body>
   <div class="field">
-    <label class="field-label" for="name"><span class="category">Workspace:</span> <span class="name">Name</span></label>
+    <label class="field-label" for="name"><span class="category">${escapeHtml(data.category)}:</span> <span class="name">Name</span></label>
     <div class="field-description">Up to 50 characters. Longer names scroll horizontally within the field.</div>
     <div class="name-wrap">
       <input type="text" id="name" maxlength="50" value="${escapeHtml(data.name)}" />
@@ -321,18 +394,18 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
   </div>
 
   <div class="field">
-    <label class="field-label" for="description"><span class="category">Workspace:</span> <span class="name">Description</span></label>
+    <label class="field-label" for="description"><span class="category">${escapeHtml(data.category)}:</span> <span class="name">Description</span></label>
     <textarea id="description">${escapeHtml(data.description)}</textarea>
   </div>
 
   <div class="field">
-    <label class="field-label" for="tags"><span class="category">Workspace:</span> <span class="name">Tags</span></label>
+    <label class="field-label" for="tags"><span class="category">${escapeHtml(data.category)}:</span> <span class="name">Tags</span></label>
     <div class="field-description">Comma-separated.</div>
     <input type="text" id="tags" value="${escapeHtml(data.tags.join(', '))}" />
   </div>
 
   <div class="field">
-    <label class="field-label" for="colorHex"><span class="category">Workspace:</span> <span class="name">Color</span></label>
+    <label class="field-label" for="colorHex"><span class="category">${escapeHtml(data.category)}:</span> <span class="name">Color</span></label>
     <div class="field-description">Click a swatch to apply it, or click the dot to open the picker; double-click a color there to apply and close, or type a hex code.</div>
     <div class="swatches" id="swatches"></div>
     <div class="row" style="margin-top: 8px;">
@@ -344,7 +417,7 @@ function renderHtml(webview: vscode.Webview, data: EditorData): string {
 
   ${showFavourites ? `
   <div class="field">
-    <label class="field-label"><span class="category">Workspace:</span> <span class="name">Favourite Files</span></label>
+    <label class="field-label"><span class="category">${escapeHtml(data.category)}:</span> <span class="name">Favourite Files</span></label>
     <ul id="favList"></ul>
     <button id="addFavBtn" class="secondary">Add File...</button>
   </div>

@@ -1,6 +1,9 @@
 export interface FavouriteFile {
   path: string;
   label?: string;
+  description?: string;
+  tags?: string[];
+  color?: string;
 }
 
 export type WorkspaceEntryType = 'folder' | 'workspaceFile';
