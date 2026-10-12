@@ -47,7 +47,8 @@ function groupIconOpen(hex?: string): vscode.Uri {
 
 // Built-in repo codicon - used for .code-workspace entries (projects). ThemeIcon only
 // tints via real ThemeColor ids (not arbitrary hex), so per-entry color isn't applied here.
-const projectIcon = new vscode.ThemeIcon('repo', new vscode.ThemeColor('charts.yellow'));
+const projectIcon = new vscode.ThemeIcon('layers', new vscode.ThemeColor('charts.yellow'));
+const projectIconCurrent = new vscode.ThemeIcon('layers-active', new vscode.ThemeColor('charts.green'));
 
 // Open folder - used for plain OS folder entries.
 function osFolderIcon(hex?: string): vscode.Uri {
@@ -193,8 +194,10 @@ export class WorkspaceTreeProvider
     item.contextValue = 'workspaceEntry';
     item.description = entry.tags.length ? entry.tags.join(', ') : undefined;
     item.tooltip = entry.description || entry.uri;
-    item.iconPath = entry.type === 'workspaceFile' ? projectIcon : osFolderIcon(entry.color);
-    if (isCurrentWorkspace(entry)) {
+    const current = isCurrentWorkspace(entry);
+    item.iconPath =
+      entry.type === 'workspaceFile' ? (current ? projectIconCurrent : projectIcon) : osFolderIcon(entry.color);
+    if (current) {
       item.description = `${item.description ? item.description + ' · ' : ''}current`;
     }
     item.command = {
